@@ -34,20 +34,30 @@ export function StatCard({ label, value, unit, hint, icon, tone = "ink", delay =
       style={{ animationDelay: `${delay}ms` }}
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="text-xs font-medium tracking-wide text-ink-muted">{label}</span>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-wide text-ink-muted">
+          {label}
+        </span>
         {icon && (
-          <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", toneIcon[tone])}>
+          <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", toneIcon[tone])}>
             {icon}
           </span>
         )}
       </div>
-      <div className="mt-3 flex items-baseline gap-1">
-        <span className={cn("font-serif text-4xl font-semibold leading-none tnum", toneText[tone])}>
+      <div className="mt-3 flex min-w-0 items-baseline gap-1 overflow-hidden">
+        <span
+          className={cn(
+            "font-serif min-w-0 shrink truncate font-semibold leading-none tnum",
+            "text-xl sm:text-2xl md:text-3xl lg:text-4xl",
+            toneText[tone]
+          )}
+        >
           {value}
         </span>
-        {unit && <span className="text-sm text-ink-muted">{unit}</span>}
+        {unit && <span className="shrink-0 text-sm text-ink-muted">{unit}</span>}
       </div>
-      {hint && <div className="mt-2 text-xs text-ink-faint">{hint}</div>}
+      {hint && (
+        <div className="mt-2 min-w-0 truncate text-xs text-ink-faint">{hint}</div>
+      )}
     </div>
   );
 }
