@@ -7,11 +7,14 @@ import type {
   Transaction,
   Inspection,
   FeeRecord,
+  PaymentHistory,
+  DunningNotice,
   WeatherDay,
   Holiday,
   DailySalesRecord,
   IngredientMap,
   WeatherType,
+  PayMethod,
 } from "@/types";
 import { todayISO, addDays } from "@/lib/utils";
 
@@ -354,22 +357,113 @@ export const seedInspections: Inspection[] = [
 
 const CURRENT_PERIOD = TODAY.slice(0, 7);
 
-export const seedFees: FeeRecord[] = seedStalls.map((s, idx) => {
-  const due = 600 + (idx % 3) * 100;
-  const statuses: ("paid" | "partial" | "unpaid")[] = ["paid", "paid", "unpaid", "partial", "unpaid", "paid", "partial", "paid"];
-  const status = statuses[idx % statuses.length];
-  const paid = status === "paid" ? due : status === "partial" ? Math.round(due * 0.5) : 0;
-  return {
-    id: `FE-${s.id}`,
-    stallId: s.id,
-    period: CURRENT_PERIOD,
-    dueAmount: due,
-    paidAmount: paid,
-    dueDate: addDays(TODAY, -2 + (idx % 4)),
-    status,
-    paidAt: status === "paid" ? addDays(TODAY, -5) : undefined,
+function getPeriodMonths(monthsBack: number): string[] {
+  const result: string[] = [];
+  const now = new Date(TODAY.replace(/-/g, "/"));
+  for (let i = monthsBack - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    result.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+  return result;
+}
+
+const PERIODS = getPeriodMonths(4);
+
+export const seedFees: FeeRecord[] = (() => {
+  const list: FeeRecord[] = [];
+  const statusMatrix: Record<string, ("paid" | "partial" | "unpaid")[]> = {
+    "ST-001": ["paid", "paid", "paid", "paid"],
+    "ST-002": ["paid", "paid", "paid", "partial"],
+    "ST-003": ["paid", "partial", "unpaid", "unpaid"],
+    "ST-004": ["paid", "paid", "partial", "partial"],
+    "ST-005": ["paid", "paid", "paid", "unpaid"],
+    "ST-006": ["paid", "paid", "paid", "paid"],
+    "ST-007": ["partial", "paid", "partial", "partial"],
+    "ST-008": ["paid", "paid", "paid", "paid"],
   };
-});
+  seedStalls.forEach((s, idx) => {
+    const due = 600 + (idx % 3) * 100;
+    PERIODS.forEach((period, pIdx) => {
+      const status = statusMatrix[s.id][pIdx];
+      const paid = status === "paid" ? due : status === "partial" ? Math.round(due * 0.5) : 0;
+      const periodDate = new Date(`${period}-01`);
+      const dueDate = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 5);
+      const dueDateISO = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}-${String(dueDate.getDate()).padStart(2, "0")}`;
+      list.push({
+        id: `FE-${s.id}-${period}`,
+        stallId: s.id,
+        period,
+        dueAmount: due,
+        paidAmount: paid,
+        dueDate: dueDateISO,
+        status,
+        paidAt: paid > 0 ? addDays(dueDateISO, -3 - (idx % 5)) : undefined,
+      });
+    });
+  });
+  return list;
+})();
+
+export const seedPaymentHistories: PaymentHistory[] = (() => {
+  const list: PaymentHistory[] = [];
+  let counter = 1;
+  const operators = ["管理员", "李主管", "王会计"];
+  seedFees.forEach((fee) => {
+    if (fee.paidAmount > 0) {
+      const payments: { amount: number; offset: number; method: PayMethod }[] = [];
+      if (fee.status === "paid") {
+        if (Math.random() > 0.5) {
+          payments.push({ amount: fee.paidAmount, offset: 0, method: "scan" });
+        } else {
+          payments.push({ amount: Math.round(fee.paidAmount * 0.6), offset: -2, method: "scan" });
+          payments.push({ amount: fee.paidAmount - Math.round(fee.paidAmount * 0.6), offset: 0, method: "cash" });
+        }
+      } else if (fee.status === "partial") {
+        payments.push({ amount: fee.paidAmount, offset: -1, method: "cash" });
+      }
+      payments.forEach((p, pi) => {
+        const paidAt = fee.paidAt ? addDays(fee.paidAt, p.offset) : TODAY;
+        list.push({
+          id: `PH-${String(counter++).padStart(4, "0")}`,
+          feeId: fee.id,
+          stallId: fee.stallId,
+          period: fee.period,
+          amount: p.amount,
+          method: p.method,
+          paidAt,
+          receiptNo: `RCP${new Date(paidAt.replace(/-/g, "/")).getFullYear()}${String(counter).padStart(6, "0")}`,
+          operator: operators[(counter + pi) % operators.length],
+          remark: pi > 0 ? "补缴余款" : undefined,
+        });
+      });
+    }
+  });
+  return list;
+})();
+
+export const seedDunningNotices: DunningNotice[] = (() => {
+  const list: DunningNotice[] = [];
+  let counter = 1;
+  seedFees.forEach((fee) => {
+    if (fee.status !== "paid" && fee.dueDate < TODAY) {
+      const overdueDays = Math.max(1, Math.floor((new Date(TODAY.replace(/-/g, "/")).getTime() - new Date(fee.dueDate.replace(/-/g, "/")).getTime()) / 86400000));
+      const statusOptions: ("pending" | "sent" | "acknowledged")[] = ["sent", "pending", "acknowledged"];
+      const status = statusOptions[counter % statusOptions.length];
+      list.push({
+        id: `DN-${String(counter++).padStart(4, "0")}`,
+        feeId: fee.id,
+        stallId: fee.stallId,
+        period: fee.period,
+        sentAt: addDays(fee.dueDate, 3),
+        dueAmount: fee.dueAmount - fee.paidAmount,
+        overdueDays,
+        status,
+        acknowledgedAt: status === "acknowledged" ? addDays(fee.dueDate, 5) : undefined,
+      });
+    }
+  });
+  return list;
+})();
 
 const WEATHER_TYPES: { type: WeatherType; desc: string }[] = [
   { type: "sunny", desc: "晴" },

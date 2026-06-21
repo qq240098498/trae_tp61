@@ -117,3 +117,35 @@ body::before {
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out;
+}
+
+@media print {
+  body {
+    background: white !important;
+  }
+  body::before {
+    display: none !important;
+  }
+  #receipt-print-area {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  @page {
+    margin: 1cm;
+  }
+}

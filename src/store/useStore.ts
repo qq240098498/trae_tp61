@@ -9,6 +9,8 @@ import type {
   Transaction,
   Inspection,
   FeeRecord,
+  PaymentHistory,
+  DunningNotice,
   PayMethod,
   AppStatus,
   InspectionResult,
@@ -26,6 +28,8 @@ import {
   seedTransactions,
   seedInspections,
   seedFees,
+  seedPaymentHistories,
+  seedDunningNotices,
   seedWeatherHistory,
   seedWeatherForecast,
   seedHolidays,
@@ -73,6 +77,22 @@ interface NewApplication {
   timeSlot: string;
   reason: string;
 }
+interface NewPayment {
+  feeId: string;
+  stallId: string;
+  period: string;
+  amount: number;
+  method: PayMethod;
+  operator: string;
+  remark?: string;
+}
+interface NewDunning {
+  feeId: string;
+  stallId: string;
+  period: string;
+  dueAmount: number;
+  overdueDays: number;
+}
 
 interface StoreState {
   stalls: Stall[];
@@ -83,6 +103,8 @@ interface StoreState {
   transactions: Transaction[];
   inspections: Inspection[];
   fees: FeeRecord[];
+  paymentHistories: PaymentHistory[];
+  dunningNotices: DunningNotice[];
   weatherHistory: WeatherDay[];
   weatherForecast: WeatherDay[];
   holidays: Holiday[];
@@ -104,7 +126,9 @@ interface StoreState {
   addApplication: (data: NewApplication) => void;
   setApplicationStatus: (id: string, status: AppStatus) => void;
 
-  payFee: (id: string, amount: number) => void;
+  payFee: (data: NewPayment) => void;
+  sendDunningNotice: (data: NewDunning) => void;
+  acknowledgeDunning: (id: string) => void;
 
   resetData: () => void;
 }
@@ -127,6 +151,8 @@ export const useStore = create<StoreState>()(
       transactions: seedTransactions,
       inspections: seedInspections,
       fees: seedFees,
+      paymentHistories: seedPaymentHistories,
+      dunningNotices: seedDunningNotices,
       weatherHistory: seedWeatherHistory,
       weatherForecast: seedWeatherForecast,
       holidays: seedHolidays,
@@ -209,19 +235,60 @@ export const useStore = create<StoreState>()(
           applications: s.applications.map((a) => (a.id === id ? { ...a, status } : a)),
         })),
 
-      payFee: (id, amount) =>
+      payFee: (data) =>
+        set((s) => {
+          const now = todayISO();
+          const receiptNo = `RCP${new Date().getFullYear()}${String(s.paymentHistories.length + 1).padStart(6, "0")}`;
+          const newPayment: PaymentHistory = {
+            id: genId("PH"),
+            feeId: data.feeId,
+            stallId: data.stallId,
+            period: data.period,
+            amount: data.amount,
+            method: data.method,
+            paidAt: now,
+            receiptNo,
+            operator: data.operator,
+            remark: data.remark,
+          };
+          return {
+            paymentHistories: [newPayment, ...s.paymentHistories],
+            fees: s.fees.map((f) => {
+              if (f.id !== data.feeId) return f;
+              const paidAmount = Math.min(f.dueAmount, f.paidAmount + data.amount);
+              const status = paidAmount >= f.dueAmount ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
+              return {
+                ...f,
+                paidAmount,
+                status,
+                paidAt: paidAmount > 0 ? now : f.paidAt,
+              };
+            }),
+          };
+        }),
+
+      sendDunningNotice: (data) =>
         set((s) => ({
-          fees: s.fees.map((f) => {
-            if (f.id !== id) return f;
-            const paidAmount = Math.min(f.dueAmount, f.paidAmount + amount);
-            const status = paidAmount >= f.dueAmount ? "paid" : paidAmount > 0 ? "partial" : "unpaid";
-            return {
-              ...f,
-              paidAmount,
-              status,
-              paidAt: paidAmount > 0 ? todayISO() : f.paidAt,
-            };
-          }),
+          dunningNotices: [
+            {
+              id: genId("DN"),
+              feeId: data.feeId,
+              stallId: data.stallId,
+              period: data.period,
+              sentAt: todayISO(),
+              dueAmount: data.dueAmount,
+              overdueDays: data.overdueDays,
+              status: "sent",
+            },
+            ...s.dunningNotices,
+          ],
+        })),
+
+      acknowledgeDunning: (id) =>
+        set((s) => ({
+          dunningNotices: s.dunningNotices.map((d) =>
+            d.id === id ? { ...d, status: "acknowledged", acknowledgedAt: todayISO() } : d,
+          ),
         })),
 
       resetData: () =>
@@ -234,6 +301,8 @@ export const useStore = create<StoreState>()(
           transactions: seedTransactions,
           inspections: seedInspections,
           fees: seedFees,
+          paymentHistories: seedPaymentHistories,
+          dunningNotices: seedDunningNotices,
           weatherHistory: seedWeatherHistory,
           weatherForecast: seedWeatherForecast,
           holidays: seedHolidays,

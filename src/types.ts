@@ -3,6 +3,7 @@ export type AppStatus = "pending" | "approved" | "rejected";
 export type InspectionResult = "pass" | "warning" | "fail";
 export type FeeStatus = "paid" | "partial" | "unpaid";
 export type LocationType = "fixed" | "temporary";
+export type DunningStatus = "pending" | "sent" | "acknowledged";
 
 export interface Stall {
   id: string;
@@ -90,6 +91,44 @@ export interface FeeRecord {
   dueDate: string;
   status: FeeStatus;
   paidAt?: string;
+}
+
+export interface PaymentHistory {
+  id: string;
+  feeId: string;
+  stallId: string;
+  period: string;
+  amount: number;
+  method: PayMethod;
+  paidAt: string;
+  receiptNo: string;
+  operator: string;
+  remark?: string;
+}
+
+export interface DunningNotice {
+  id: string;
+  feeId: string;
+  stallId: string;
+  period: string;
+  sentAt: string;
+  dueAmount: number;
+  overdueDays: number;
+  status: DunningStatus;
+  acknowledgedAt?: string;
+}
+
+export interface MonthlyFeeSummary {
+  stallId: string;
+  stallName: string;
+  stallNo: string;
+  period: string;
+  dueAmount: number;
+  paidAmount: number;
+  overdueAmount: number;
+  status: FeeStatus;
+  paymentCount: number;
+  lastPaidAt?: string;
 }
 
 export interface AlertItem {
