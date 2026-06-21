@@ -18,6 +18,10 @@ import type {
   Holiday,
   DailySalesRecord,
   IngredientMap,
+  Order,
+  OrderItem,
+  OrderStatus,
+  OrderSource,
 } from "@/types";
 import {
   seedLocations,
@@ -36,6 +40,7 @@ import {
   seedSalesRecords,
   seedIngredientMaps,
   INGREDIENT_PRICES,
+  seedOrders,
 } from "@/data/seed";
 import { todayISO, genId } from "@/lib/utils";
 
@@ -94,6 +99,22 @@ interface NewDunning {
   overdueDays: number;
 }
 
+interface NewOrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+  category: string;
+}
+
+interface NewOrder {
+  stallId: string;
+  items: NewOrderItem[];
+  source: OrderSource;
+  customerName?: string;
+  customerPhone?: string;
+  note?: string;
+}
+
 interface StoreState {
   stalls: Stall[];
   locations: Location[];
@@ -111,6 +132,7 @@ interface StoreState {
   salesRecords: DailySalesRecord[];
   ingredientMaps: IngredientMap[];
   ingredientPrices: Record<string, number>;
+  orders: Order[];
 
   addDailyReg: (data: NewDailyReg) => void;
   removeDailyReg: (id: string) => void;
@@ -129,6 +151,12 @@ interface StoreState {
   payFee: (data: NewPayment) => void;
   sendDunningNotice: (data: NewDunning) => void;
   acknowledgeDunning: (id: string) => void;
+
+  addOrder: (data: NewOrder) => void;
+  updateOrderStatus: (id: string, status: OrderStatus) => void;
+  callNextOrder: (stallId: string) => Order | null;
+  completeOrder: (id: string) => void;
+  cancelOrder: (id: string) => void;
 
   resetData: () => void;
 }
@@ -159,6 +187,7 @@ export const useStore = create<StoreState>()(
       salesRecords: seedSalesRecords,
       ingredientMaps: seedIngredientMaps,
       ingredientPrices: INGREDIENT_PRICES,
+      orders: seedOrders,
 
       addDailyReg: (data) =>
         set((s) => ({
@@ -291,6 +320,88 @@ export const useStore = create<StoreState>()(
           ),
         })),
 
+      addOrder: (data) =>
+        set((s) => {
+          const now = new Date();
+          const dateStr = now.toISOString().slice(0, 10);
+          const todayOrders = s.orders.filter((o) => o.createdAt.startsWith(dateStr));
+          const nextNo = todayOrders.length + 1;
+          const orderNo = `A${String(100 + nextNo)}`;
+          const totalAmount = data.items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+
+          const newOrder: Order = {
+            id: genId("ORD"),
+            orderNo,
+            stallId: data.stallId,
+            items: data.items,
+            totalAmount,
+            status: "pending",
+            source: data.source,
+            customerName: data.customerName,
+            customerPhone: data.customerPhone,
+            createdAt: now.toISOString().slice(0, 16).replace("T", " "),
+            note: data.note,
+          };
+
+          return {
+            orders: [newOrder, ...s.orders],
+          };
+        }),
+
+      updateOrderStatus: (id, status) =>
+        set((s) => {
+          const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+          return {
+            orders: s.orders.map((o) => {
+              if (o.id !== id) return o;
+              const updates: Partial<Order> = { status };
+              if (status === "ready") updates.calledAt = now;
+              if (status === "completed") updates.completedAt = now;
+              return { ...o, ...updates };
+            }),
+          };
+        }),
+
+      callNextOrder: (stallId) => {
+        let nextOrder: Order | null = null;
+        set((s) => {
+          const pendingOrders = s.orders.filter(
+            (o) => o.stallId === stallId && o.status === "pending",
+          );
+          if (pendingOrders.length === 0) return s;
+
+          const oldest = pendingOrders.reduce((a, b) =>
+            a.createdAt < b.createdAt ? a : b,
+          );
+          nextOrder = oldest;
+
+          const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+          return {
+            orders: s.orders.map((o) =>
+              o.id === oldest.id ? { ...o, status: "preparing" as OrderStatus } : o,
+            ),
+          };
+        });
+        return nextOrder;
+      },
+
+      completeOrder: (id) =>
+        set((s) => {
+          const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+          return {
+            orders: s.orders.map((o) =>
+              o.id === id ? { ...o, status: "completed" as OrderStatus, completedAt: now } : o,
+            ),
+          };
+        }),
+
+      cancelOrder: (id) =>
+        set((s) => ({
+          orders: s.orders.map((o) =>
+            o.id === id ? { ...o, status: "cancelled" as OrderStatus } : o,
+          ),
+        })),
+
       resetData: () =>
         set({
           stalls: seedStalls,
@@ -309,6 +420,7 @@ export const useStore = create<StoreState>()(
           salesRecords: seedSalesRecords,
           ingredientMaps: seedIngredientMaps,
           ingredientPrices: INGREDIENT_PRICES,
+          orders: seedOrders,
         }),
     }),
     {

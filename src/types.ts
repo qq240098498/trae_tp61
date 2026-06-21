@@ -4,6 +4,8 @@ export type InspectionResult = "pass" | "warning" | "fail";
 export type FeeStatus = "paid" | "partial" | "unpaid";
 export type LocationType = "fixed" | "temporary";
 export type DunningStatus = "pending" | "sent" | "acknowledged";
+export type OrderStatus = "pending" | "preparing" | "ready" | "completed" | "cancelled";
+export type OrderSource = "scan" | "counter";
 
 export interface Stall {
   id: string;
@@ -197,4 +199,35 @@ export interface ProcurementItem {
   toPurchase: number;
   usedBy: string[];
   estimatedCost?: number;
+}
+
+export interface OrderItem {
+  name: string;
+  quantity: number;
+  price: number;
+  category: string;
+}
+
+export interface Order {
+  id: string;
+  orderNo: string;
+  stallId: string;
+  items: OrderItem[];
+  totalAmount: number;
+  status: OrderStatus;
+  source: OrderSource;
+  customerName?: string;
+  customerPhone?: string;
+  createdAt: string;
+  calledAt?: string;
+  completedAt?: string;
+  note?: string;
+}
+
+export interface QueueStats {
+  pending: number;
+  preparing: number;
+  ready: number;
+  completed: number;
+  avgWaitTime: number;
 }

@@ -15,6 +15,9 @@ import type {
   IngredientMap,
   WeatherType,
   PayMethod,
+  Order,
+  OrderItem,
+  OrderStatus,
 } from "@/types";
 import { todayISO, addDays } from "@/lib/utils";
 
@@ -656,3 +659,109 @@ export const INGREDIENT_PRICES: Record<string, number> = {
   "薄脆": 0.5, "鲜肉糜": 26, "馄饨皮": 7, "杂粮粉": 6, "芝麻": 25,
   "猪后腿肉": 27, "猪皮冻": 18, "饺子皮": 6, "韭菜": 4,
 };
+
+const MENU_ITEMS: Record<string, { name: string; price: number; category: string }[]> = {
+  "ST-001": [
+    { name: "原味手抓饼", price: 6, category: "手抓饼" },
+    { name: "鸡蛋手抓饼", price: 8, category: "手抓饼" },
+    { name: "加肠手抓饼", price: 10, category: "手抓饼" },
+    { name: "热豆浆", price: 3, category: "豆浆" },
+    { name: "甜豆浆", price: 3.5, category: "豆浆" },
+  ],
+  "ST-002": [
+    { name: "猪肉包子", price: 2.5, category: "包子" },
+    { name: "韭菜包子", price: 2, category: "包子" },
+    { name: "小米粥", price: 3, category: "粥" },
+    { name: "皮蛋瘦肉粥", price: 5, category: "粥" },
+  ],
+  "ST-003": [
+    { name: "油条", price: 3, category: "油条" },
+    { name: "胡辣汤（小碗）", price: 5, category: "胡辣汤" },
+    { name: "胡辣汤（大碗）", price: 7, category: "胡辣汤" },
+  ],
+  "ST-004": [
+    { name: "基础煎饼果子", price: 7, category: "煎饼果子" },
+    { name: "双蛋煎饼", price: 10, category: "煎饼果子" },
+    { name: "加肠煎饼", price: 11, category: "煎饼果子" },
+  ],
+  "ST-005": [
+    { name: "阳春面", price: 8, category: "面条" },
+    { name: "炸酱面", price: 12, category: "面条" },
+    { name: "鲜肉馄饨", price: 10, category: "馄饨" },
+    { name: "菜肉大馄饨", price: 12, category: "馄饨" },
+  ],
+  "ST-006": [
+    { name: "原味杂粮煎饼", price: 6, category: "杂粮煎饼" },
+    { name: "鸡蛋杂粮煎饼", price: 8, category: "杂粮煎饼" },
+    { name: "薄脆杂粮煎饼", price: 9, category: "杂粮煎饼" },
+  ],
+  "ST-007": [
+    { name: "芝麻烧饼", price: 3, category: "烧饼" },
+    { name: "咸香烧饼", price: 3.5, category: "烧饼" },
+    { name: "烧饼夹菜", price: 6, category: "烧饼" },
+  ],
+  "ST-008": [
+    { name: "鲜肉小笼包", price: 8, category: "小笼包" },
+    { name: "蟹粉小笼包", price: 15, category: "小笼包" },
+    { name: "鲜肉蒸饺", price: 6, category: "蒸饺" },
+    { name: "韭菜蒸饺", price: 5, category: "蒸饺" },
+  ],
+};
+
+function buildOrders(): Order[] {
+  const list: Order[] = [];
+  const activeStalls = ["ST-001", "ST-002", "ST-003", "ST-004", "ST-005", "ST-006", "ST-007", "ST-008"];
+  const statuses: OrderStatus[] = ["pending", "preparing", "ready", "completed", "completed", "completed"];
+  const now = new Date();
+  let orderCounter = 1;
+
+  for (let i = 20; i >= 0; i--) {
+    const stallId = activeStalls[i % activeStalls.length];
+    const menu = MENU_ITEMS[stallId];
+    const numItems = 1 + (i % 3);
+    const items: OrderItem[] = [];
+
+    for (let j = 0; j < numItems; j++) {
+      const item = menu[(i + j) % menu.length];
+      const qty = 1 + ((i + j * 3) % 3);
+      items.push({
+        name: item.name,
+        quantity: qty,
+        price: item.price,
+        category: item.category,
+      });
+    }
+
+    const totalAmount = items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+    const minutesAgo = i * 3 + (i % 5);
+    const orderTime = new Date(now.getTime() - minutesAgo * 60 * 1000);
+    const status = statuses[i % statuses.length];
+
+    const orderNo = `A${String(100 + orderCounter)}`;
+    const order: Order = {
+      id: `ORD-${String(orderCounter).padStart(4, "0")}`,
+      orderNo,
+      stallId,
+      items,
+      totalAmount,
+      status,
+      source: i % 3 === 0 ? "counter" : "scan",
+      customerName: i % 4 === 0 ? `顾客${orderNo}` : undefined,
+      createdAt: orderTime.toISOString().slice(0, 16).replace("T", " "),
+      calledAt: status === "ready" || status === "completed"
+        ? new Date(orderTime.getTime() + (2 + (i % 4)) * 60 * 1000).toISOString().slice(0, 16).replace("T", " ")
+        : undefined,
+      completedAt: status === "completed"
+        ? new Date(orderTime.getTime() + (5 + (i % 6)) * 60 * 1000).toISOString().slice(0, 16).replace("T", " ")
+        : undefined,
+      note: i % 7 === 0 ? "不要辣" : undefined,
+    };
+
+    list.push(order);
+    orderCounter++;
+  }
+
+  return list;
+}
+
+export const seedOrders: Order[] = buildOrders();
