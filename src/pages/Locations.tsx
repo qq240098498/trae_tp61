@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   MapPin,
   Plus,
@@ -240,7 +240,35 @@ function ApplyModal({
     timeSlot: TIME_SLOTS[0],
     reason: "",
   });
+
+  const resetForm = () => {
+    setForm({
+      stallId: stalls[0]?.id ?? "",
+      locationId: locations.find((l) => l.type === "temporary")?.id ?? locations[0]?.id ?? "",
+      date: todayISO(),
+      timeSlot: TIME_SLOTS[0],
+      reason: "",
+    });
+  };
+
+  useEffect(() => {
+    if (open) {
+      setForm({
+        stallId: stalls[0]?.id ?? "",
+        locationId: locations.find((l) => l.type === "temporary")?.id ?? locations[0]?.id ?? "",
+        date: todayISO(),
+        timeSlot: TIME_SLOTS[0],
+        reason: "",
+      });
+    }
+  }, [open, stalls, locations]);
+
   const valid = form.stallId && form.locationId && form.reason.trim().length > 0;
+
+  const handleSubmit = () => {
+    onSubmit(form);
+    resetForm();
+  };
 
   return (
     <Modal
@@ -256,7 +284,7 @@ function ApplyModal({
           <button
             className="btn-primary"
             disabled={!valid}
-            onClick={() => onSubmit(form)}
+            onClick={handleSubmit}
           >
             提交申请
           </button>
