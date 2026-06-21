@@ -8,9 +8,10 @@ import {
   Users,
   MapPinned,
   FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
-import { locationOccupancy } from "@/lib/business";
+import { locationOccupancy, findDuplicateApplication } from "@/lib/business";
 import { todayISO, formatDate, cn } from "@/lib/utils";
 import PageHeader from "@/components/PageHeader";
 import SectionCard from "@/components/SectionCard";
@@ -18,7 +19,7 @@ import Stamp from "@/components/Stamp";
 import Modal from "@/components/Modal";
 import { Field, TextInput, Select } from "@/components/Form";
 import { TIME_SLOTS } from "@/data/seed";
-import type { AppStatus } from "@/types";
+import type { AppStatus, TempApplication } from "@/types";
 
 type Tab = "fixed" | "applications";
 
@@ -185,6 +186,7 @@ export default function Locations() {
 
       <ApplyModal
         open={openApply}
+        applications={applications}
         onClose={() => setOpenApply(false)}
         onSubmit={(data) => {
           addApplication(data);
@@ -225,10 +227,12 @@ interface ApplyData {
 
 function ApplyModal({
   open,
+  applications,
   onClose,
   onSubmit,
 }: {
   open: boolean;
+  applications: TempApplication[];
   onClose: () => void;
   onSubmit: (data: ApplyData) => void;
 }) {
@@ -263,9 +267,22 @@ function ApplyModal({
     }
   }, [open, stalls, locations]);
 
-  const valid = form.stallId && form.locationId && form.reason.trim().length > 0;
+  const duplicate = findDuplicateApplication(
+    applications,
+    form.stallId,
+    form.locationId,
+    form.date,
+    form.timeSlot,
+  );
+
+  const valid =
+    form.stallId &&
+    form.locationId &&
+    form.reason.trim().length > 0 &&
+    !duplicate;
 
   const handleSubmit = () => {
+    if (duplicate) return;
     onSubmit(form);
     resetForm();
   };
@@ -292,6 +309,22 @@ function ApplyModal({
       }
     >
       <div className="space-y-4">
+        {duplicate && (
+          <div className="flex items-start gap-2 rounded-lg border border-crimson-200 bg-crimson-50/60 p-3">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-crimson-500" />
+            <div className="text-sm">
+              <div className="font-medium text-crimson-600">检测到重复申请</div>
+              <div className="mt-0.5 text-xs text-crimson-500">
+                该摊位已于 {formatDate(duplicate.date)} 申请此点位 {duplicate.timeSlot} 时段，
+                当前状态
+                <span className="mx-1 font-medium">
+                  {duplicate.status === "pending" ? "待审核" : "已通过"}
+                </span>
+                ，无需重复提交。
+              </div>
+            </div>
+          </div>
+        )}
         <Field label="申请摊位">
           <Select value={form.stallId} onChange={(e) => setForm({ ...form, stallId: e.target.value })}>
             {stalls.map((s) => (

@@ -165,3 +165,21 @@ export function monthTotal(transactions: Transaction[], today = todayISO()): num
     .filter((t) => t.time.startsWith(prefix))
     .reduce((s, t) => s + t.amount, 0);
 }
+
+/** 重复申请检测：同一摊位在同一天相同时段的非驳回申请已存在 */
+export function findDuplicateApplication(
+  applications: TempApplication[],
+  stallId: string,
+  locationId: string,
+  date: string,
+  timeSlot: string,
+): TempApplication | undefined {
+  return applications.find(
+    (a) =>
+      a.stallId === stallId &&
+      a.locationId === locationId &&
+      a.date === date &&
+      a.timeSlot === timeSlot &&
+      a.status !== "rejected",
+  );
+}
