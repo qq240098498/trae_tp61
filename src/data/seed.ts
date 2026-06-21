@@ -385,7 +385,8 @@ function buildWeather(days: number, offset: number): WeatherDay[] {
   const list: WeatherDay[] = [];
   for (let i = 0; i < days; i++) {
     const date = addDays(TODAY, offset + i);
-    const wIdx = (i + Math.floor(offset / 2) + 3) % WEATHER_TYPES.length;
+    const rawIdx = i + Math.floor(Math.abs(offset) / 2) + 3;
+    const wIdx = ((rawIdx % WEATHER_TYPES.length) + WEATHER_TYPES.length) % WEATHER_TYPES.length;
     const baseHigh = 26 + ((i + Math.abs(offset)) % 8);
     const baseLow = 18 + ((i + 5) % 6);
     const wType = WEATHER_TYPES[wIdx];
