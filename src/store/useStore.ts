@@ -155,6 +155,7 @@ interface StoreState {
   addOrder: (data: NewOrder) => void;
   updateOrderStatus: (id: string, status: OrderStatus) => void;
   callNextOrder: (stallId: string) => Order | null;
+  recallOrder: (id: string) => Order | null;
   completeOrder: (id: string) => void;
   cancelOrder: (id: string) => void;
 
@@ -365,24 +366,56 @@ export const useStore = create<StoreState>()(
       callNextOrder: (stallId) => {
         let nextOrder: Order | null = null;
         set((s) => {
+          const readyOrders = s.orders.filter(
+            (o) => o.stallId === stallId && o.status === "ready",
+          );
+          const preparingOrders = s.orders.filter(
+            (o) => o.stallId === stallId && o.status === "preparing",
+          );
           const pendingOrders = s.orders.filter(
             (o) => o.stallId === stallId && o.status === "pending",
           );
-          if (pendingOrders.length === 0) return s;
 
-          const oldest = pendingOrders.reduce((a, b) =>
-            a.createdAt < b.createdAt ? a : b,
-          );
-          nextOrder = oldest;
+          let target: Order | null = null;
+          let newStatus: OrderStatus | null = null;
 
-          const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+          if (readyOrders.length > 0) {
+            target = readyOrders.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+            newStatus = null;
+          } else if (preparingOrders.length > 0) {
+            target = preparingOrders.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+            newStatus = null;
+          } else if (pendingOrders.length > 0) {
+            target = pendingOrders.reduce((a, b) => (a.createdAt < b.createdAt ? a : b));
+            newStatus = "preparing";
+          }
+
+          if (!target) return s;
+          nextOrder = target;
+
+          if (!newStatus) {
+            return s;
+          }
+
           return {
             orders: s.orders.map((o) =>
-              o.id === oldest.id ? { ...o, status: "preparing" as OrderStatus } : o,
+              o.id === target!.id ? { ...o, status: newStatus as OrderStatus } : o,
             ),
           };
         });
         return nextOrder;
+      },
+
+      recallOrder: (id) => {
+        let order: Order | null = null;
+        set((s) => {
+          const found = s.orders.find((o) => o.id === id);
+          if (!found) return s;
+          if (found.status !== "ready" && found.status !== "preparing") return s;
+          order = found;
+          return s;
+        });
+        return order;
       },
 
       completeOrder: (id) =>

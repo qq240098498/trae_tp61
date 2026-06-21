@@ -35,7 +35,7 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 };
 
 export default function QueueSystem() {
-  const { stalls, orders, updateOrderStatus, callNextOrder, completeOrder, cancelOrder } = useStore();
+  const { stalls, orders, updateOrderStatus, callNextOrder, recallOrder, completeOrder, cancelOrder } = useStore();
   const [selectedStall, setSelectedStall] = useState<string>(stalls[0]?.id ?? "");
   const [callingOrder, setCallingOrder] = useState<Order | null>(null);
   const [showCallModal, setShowCallModal] = useState(false);
@@ -85,6 +85,14 @@ export default function QueueSystem() {
     const next = callNextOrder(selectedStall);
     if (next) {
       setCallingOrder(next);
+      setShowCallModal(true);
+    }
+  };
+
+  const handleRecall = (order: Order) => {
+    const found = recallOrder(order.id);
+    if (found) {
+      setCallingOrder(found);
       setShowCallModal(true);
     }
   };
@@ -167,7 +175,7 @@ export default function QueueSystem() {
       <div className="mb-6">
         <SectionCard
           title="叫号器"
-          subtitle="点击叫号，开始制作下一个订单"
+          subtitle="优先呼叫待取餐订单，其次呼叫制作中订单，最后开始制作下一个订单"
           icon={<Bell size={18} />}
         >
           <div className="flex flex-col items-center gap-4 py-6 sm:flex-row sm:justify-between">
@@ -176,9 +184,9 @@ export default function QueueSystem() {
                 <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-terracotta-500 text-cream-50 shadow-stamp">
                   <Volume2 size={36} />
                 </div>
-                {stats.pending > 0 && (
+                {stats.ready + stats.preparing + stats.pending > 0 && (
                   <span className="absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-crimson-400 px-2 text-xs font-bold text-cream-50">
-                    {stats.pending}
+                    {stats.ready + stats.preparing + stats.pending}
                   </span>
                 )}
               </div>
@@ -186,16 +194,21 @@ export default function QueueSystem() {
                 <div className="text-sm text-ink-muted">当前摊位</div>
                 <div className="font-display text-xl text-ink">{currentStall?.name}</div>
                 <div className="text-xs text-ink-faint">{currentStall?.category}</div>
+                {stats.ready > 0 && (
+                  <div className="mt-1 text-xs text-olive-500">
+                    待取餐：{stats.ready} 单
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-3">
               <button
                 className="btn-primary !px-6 !py-3 text-base"
                 onClick={handleCallNext}
-                disabled={stats.pending === 0}
+                disabled={stats.ready + stats.preparing + stats.pending === 0}
               >
                 <Bell size={20} />
-                叫下一号
+                {stats.ready > 0 ? "叫号取餐" : stats.preparing > 0 ? "叫号提醒" : "叫下一号"}
               </button>
             </div>
           </div>
@@ -254,13 +267,22 @@ export default function QueueSystem() {
                 order={order}
                 waitTime={getWaitTime(order)}
                 actions={
-                  <button
-                    className="btn-primary !py-1.5 !px-3 text-xs !bg-olive-500 hover:!bg-olive-600"
-                    onClick={() => handleMarkReady(order.id)}
-                  >
-                    <CheckCircle size={14} />
-                    完成制作
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-ghost !py-1.5 !px-3 text-xs"
+                      onClick={() => handleRecall(order)}
+                    >
+                      <Bell size={14} />
+                      再次呼叫
+                    </button>
+                    <button
+                      className="btn-primary !py-1.5 !px-3 text-xs !bg-olive-500 hover:!bg-olive-600"
+                      onClick={() => handleMarkReady(order.id)}
+                    >
+                      <CheckCircle size={14} />
+                      完成制作
+                    </button>
+                  </div>
                 }
               />
             ))}
@@ -283,12 +305,21 @@ export default function QueueSystem() {
                 waitTime={getWaitTime(order)}
                 highlight
                 actions={
-                  <button
-                    className="btn-primary !py-1.5 !px-3 text-xs"
-                    onClick={() => handleComplete(order.id)}
-                  >
-                    确认取餐
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      className="btn-ghost !py-1.5 !px-3 text-xs"
+                      onClick={() => handleRecall(order)}
+                    >
+                      <Bell size={14} />
+                      再次呼叫
+                    </button>
+                    <button
+                      className="btn-primary !py-1.5 !px-3 text-xs"
+                      onClick={() => handleComplete(order.id)}
+                    >
+                      确认取餐
+                    </button>
+                  </div>
                 }
               />
             ))}
@@ -300,7 +331,15 @@ export default function QueueSystem() {
         open={showCallModal}
         onClose={() => setShowCallModal(false)}
         title="叫号通知"
-        subtitle="请顾客前来取餐"
+        subtitle={
+          callingOrder
+            ? callingOrder.status === "ready"
+              ? "请顾客前来取餐"
+              : callingOrder.status === "preparing"
+              ? "您的餐点正在制作中"
+              : "已开始为您制作"
+            : "请顾客前来取餐"
+        }
       >
         {callingOrder && (
           <div className="py-4 text-center">
@@ -310,7 +349,13 @@ export default function QueueSystem() {
             <div className="mb-2 text-6xl font-serif font-bold text-terracotta-500">
               {callingOrder.orderNo}
             </div>
-            <p className="text-sm text-ink-muted">号顾客，您的餐点正在制作中</p>
+            <p className="text-sm text-ink-muted">
+              {callingOrder.status === "ready"
+                ? "号顾客，您的餐点已备好，请前来取餐"
+                : callingOrder.status === "preparing"
+                ? "号顾客，您的餐点正在制作中，请稍候"
+                : "号顾客，您的餐点已开始制作"}
+            </p>
             <div className="mt-4 rounded-lg bg-cream-50 p-4 text-left">
               <div className="mb-2 text-sm font-medium text-ink">订单明细</div>
               {callingOrder.items.map((item, i) => (
