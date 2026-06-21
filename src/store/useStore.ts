@@ -12,6 +12,10 @@ import type {
   PayMethod,
   AppStatus,
   InspectionResult,
+  WeatherDay,
+  Holiday,
+  DailySalesRecord,
+  IngredientMap,
 } from "@/types";
 import {
   seedLocations,
@@ -22,6 +26,12 @@ import {
   seedTransactions,
   seedInspections,
   seedFees,
+  seedWeatherHistory,
+  seedWeatherForecast,
+  seedHolidays,
+  seedSalesRecords,
+  seedIngredientMaps,
+  INGREDIENT_PRICES,
 } from "@/data/seed";
 import { todayISO, genId } from "@/lib/utils";
 
@@ -73,6 +83,12 @@ interface StoreState {
   transactions: Transaction[];
   inspections: Inspection[];
   fees: FeeRecord[];
+  weatherHistory: WeatherDay[];
+  weatherForecast: WeatherDay[];
+  holidays: Holiday[];
+  salesRecords: DailySalesRecord[];
+  ingredientMaps: IngredientMap[];
+  ingredientPrices: Record<string, number>;
 
   addDailyReg: (data: NewDailyReg) => void;
   removeDailyReg: (id: string) => void;
@@ -111,6 +127,12 @@ export const useStore = create<StoreState>()(
       transactions: seedTransactions,
       inspections: seedInspections,
       fees: seedFees,
+      weatherHistory: seedWeatherHistory,
+      weatherForecast: seedWeatherForecast,
+      holidays: seedHolidays,
+      salesRecords: seedSalesRecords,
+      ingredientMaps: seedIngredientMaps,
+      ingredientPrices: INGREDIENT_PRICES,
 
       addDailyReg: (data) =>
         set((s) => ({
@@ -212,6 +234,12 @@ export const useStore = create<StoreState>()(
           transactions: seedTransactions,
           inspections: seedInspections,
           fees: seedFees,
+          weatherHistory: seedWeatherHistory,
+          weatherForecast: seedWeatherForecast,
+          holidays: seedHolidays,
+          salesRecords: seedSalesRecords,
+          ingredientMaps: seedIngredientMaps,
+          ingredientPrices: INGREDIENT_PRICES,
         }),
     }),
     {

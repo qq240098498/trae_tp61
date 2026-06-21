@@ -7,6 +7,11 @@ import type {
   Transaction,
   Inspection,
   FeeRecord,
+  WeatherDay,
+  Holiday,
+  DailySalesRecord,
+  IngredientMap,
+  WeatherType,
 } from "@/types";
 import { todayISO, addDays } from "@/lib/utils";
 
@@ -365,3 +370,194 @@ export const seedFees: FeeRecord[] = seedStalls.map((s, idx) => {
     paidAt: status === "paid" ? addDays(TODAY, -5) : undefined,
   };
 });
+
+const WEATHER_TYPES: { type: WeatherType; desc: string }[] = [
+  { type: "sunny", desc: "晴" },
+  { type: "cloudy", desc: "多云" },
+  { type: "sunny", desc: "晴转多云" },
+  { type: "rainy", desc: "小雨" },
+  { type: "cloudy", desc: "阴" },
+  { type: "hot", desc: "高温" },
+  { type: "rainy", desc: "阵雨" },
+];
+
+function buildWeather(days: number, offset: number): WeatherDay[] {
+  const list: WeatherDay[] = [];
+  for (let i = 0; i < days; i++) {
+    const date = addDays(TODAY, offset + i);
+    const wIdx = (i + Math.floor(offset / 2) + 3) % WEATHER_TYPES.length;
+    const baseHigh = 26 + ((i + Math.abs(offset)) % 8);
+    const baseLow = 18 + ((i + 5) % 6);
+    const wType = WEATHER_TYPES[wIdx];
+    const adjust = wType.type === "rainy" ? -3 : wType.type === "hot" ? 5 : wType.type === "snowy" ? -10 : 0;
+    list.push({
+      date,
+      type: wType.type,
+      tempHigh: baseHigh + adjust,
+      tempLow: baseLow + adjust,
+      description: wType.desc,
+    });
+  }
+  return list;
+}
+
+export const seedWeatherHistory: WeatherDay[] = buildWeather(21, -21);
+export const seedWeatherForecast: WeatherDay[] = buildWeather(7, 1);
+
+export const seedHolidays: Holiday[] = [
+  { date: addDays(TODAY, 3), name: "端午节", isPublic: true },
+  { date: addDays(TODAY, 4), name: "端午调休", isPublic: true },
+  { date: addDays(TODAY, 5), name: "端午调休", isPublic: true },
+];
+
+export const seedSalesRecords: DailySalesRecord[] = (() => {
+  const list: DailySalesRecord[] = [];
+  const stallCats: Record<string, string[]> = {
+    "ST-001": ["手抓饼", "豆浆"],
+    "ST-002": ["包子", "粥"],
+    "ST-003": ["油条", "胡辣汤"],
+    "ST-004": ["煎饼果子"],
+    "ST-005": ["面条", "馄饨"],
+    "ST-006": ["杂粮煎饼"],
+    "ST-007": ["烧饼"],
+    "ST-008": ["小笼包", "蒸饺"],
+  };
+  const basePrice: Record<string, number> = {
+    手抓饼: 6, 豆浆: 3, 包子: 2.5, 粥: 4, 油条: 3,
+    胡辣汤: 5, 煎饼果子: 7, 面条: 8, 馄饨: 7,
+    杂粮煎饼: 6, 烧饼: 3, 小笼包: 8, 蒸饺: 6,
+  };
+  for (let d = 20; d >= 1; d--) {
+    const date = addDays(TODAY, -d);
+    const dayOfWeek = new Date(date.replace(/-/g, "/")).getDay();
+    const weekendBoost = dayOfWeek === 0 || dayOfWeek === 6 ? 1.2 : 1.0;
+    const weatherIdx = (21 - d) % WEATHER_TYPES.length;
+    const weatherBoost = WEATHER_TYPES[weatherIdx].type === "rainy" ? 1.15 : WEATHER_TYPES[weatherIdx].type === "hot" ? 0.9 : 1.0;
+
+    Object.entries(stallCats).forEach(([stallId, cats], si) => {
+      cats.forEach((cat, ci) => {
+        const baseQty = 30 + ((si * 7 + ci * 11 + d * 3) % 35);
+        const randomFactor = 0.85 + ((si * 13 + ci * 7 + d) % 30) / 100;
+        const quantity = Math.round(baseQty * weekendBoost * weatherBoost * randomFactor);
+        const price = basePrice[cat] ?? 5;
+        list.push({
+          date,
+          stallId,
+          category: cat,
+          quantity,
+          revenue: Math.round(quantity * price * 100) / 100,
+        });
+      });
+    });
+  }
+  return list;
+})();
+
+export const seedIngredientMaps: IngredientMap[] = [
+  {
+    category: "手抓饼",
+    ingredients: [
+      { name: "面粉（高筋）", quantity: 0.12, unit: "kg" },
+      { name: "食用油", quantity: 0.02, unit: "L" },
+      { name: "鸡蛋", quantity: 1, unit: "个" },
+    ],
+  },
+  {
+    category: "豆浆",
+    ingredients: [
+      { name: "黄豆", quantity: 0.08, unit: "kg" },
+      { name: "白糖", quantity: 0.015, unit: "kg" },
+    ],
+  },
+  {
+    category: "包子",
+    ingredients: [
+      { name: "面粉（中筋）", quantity: 0.05, unit: "kg" },
+      { name: "猪前腿肉", quantity: 0.03, unit: "kg" },
+      { name: "酵母", quantity: 0.001, unit: "kg" },
+    ],
+  },
+  {
+    category: "粥",
+    ingredients: [
+      { name: "粳米", quantity: 0.06, unit: "kg" },
+      { name: "绿豆", quantity: 0.01, unit: "kg" },
+    ],
+  },
+  {
+    category: "油条",
+    ingredients: [
+      { name: "面粉（中筋）", quantity: 0.06, unit: "kg" },
+      { name: "食用油", quantity: 0.03, unit: "L" },
+    ],
+  },
+  {
+    category: "胡辣汤",
+    ingredients: [
+      { name: "胡辣汤料包", quantity: 0.05, unit: "包" },
+      { name: "粉条", quantity: 0.02, unit: "kg" },
+      { name: "面筋", quantity: 0.015, unit: "kg" },
+    ],
+  },
+  {
+    category: "煎饼果子",
+    ingredients: [
+      { name: "绿豆杂面", quantity: 0.08, unit: "kg" },
+      { name: "鸡蛋", quantity: 1, unit: "个" },
+      { name: "薄脆", quantity: 1, unit: "片" },
+    ],
+  },
+  {
+    category: "面条",
+    ingredients: [
+      { name: "面粉（高筋）", quantity: 0.1, unit: "kg" },
+      { name: "鲜肉糜", quantity: 0.02, unit: "kg" },
+    ],
+  },
+  {
+    category: "馄饨",
+    ingredients: [
+      { name: "馄饨皮", quantity: 0.04, unit: "kg" },
+      { name: "鲜肉糜", quantity: 0.03, unit: "kg" },
+    ],
+  },
+  {
+    category: "杂粮煎饼",
+    ingredients: [
+      { name: "杂粮粉", quantity: 0.1, unit: "kg" },
+      { name: "鸡蛋", quantity: 1, unit: "个" },
+    ],
+  },
+  {
+    category: "烧饼",
+    ingredients: [
+      { name: "面粉", quantity: 0.08, unit: "kg" },
+      { name: "芝麻", quantity: 0.005, unit: "kg" },
+      { name: "食用油", quantity: 0.01, unit: "L" },
+    ],
+  },
+  {
+    category: "小笼包",
+    ingredients: [
+      { name: "面粉（中筋）", quantity: 0.04, unit: "kg" },
+      { name: "猪后腿肉", quantity: 0.035, unit: "kg" },
+      { name: "猪皮冻", quantity: 0.01, unit: "kg" },
+    ],
+  },
+  {
+    category: "蒸饺",
+    ingredients: [
+      { name: "饺子皮", quantity: 0.04, unit: "kg" },
+      { name: "猪后腿肉", quantity: 0.03, unit: "kg" },
+      { name: "韭菜", quantity: 0.02, unit: "kg" },
+    ],
+  },
+];
+
+export const INGREDIENT_PRICES: Record<string, number> = {
+  "面粉（高筋）": 3.3, "面粉（中筋）": 2.9, "面粉": 3.3, "食用油": 12, "鸡蛋": 1.2,
+  "黄豆": 5.5, "白糖": 5.8, "酵母": 35, "猪前腿肉": 27, "粳米": 5.5,
+  "绿豆": 8, "胡辣汤料包": 8, "粉条": 6, "面筋": 9, "绿豆杂面": 4.8,
+  "薄脆": 0.5, "鲜肉糜": 26, "馄饨皮": 7, "杂粮粉": 6, "芝麻": 25,
+  "猪后腿肉": 27, "猪皮冻": 18, "饺子皮": 6, "韭菜": 4,
+};

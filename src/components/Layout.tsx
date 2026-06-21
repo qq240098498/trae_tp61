@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   RotateCcw,
   Sun,
+  LineChart,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
 import { computeAlerts } from "@/lib/business";
@@ -31,6 +32,7 @@ const NAV: NavItem[] = [
   { to: "/locations", label: "点位管理", icon: MapPin, desc: "固定点位 / 临时申请" },
   { to: "/daily-ops", label: "出摊登记", icon: ClipboardList, desc: "摊位 / 时段 / 品类" },
   { to: "/procurement", label: "食材进货", icon: Package, desc: "进货台账" },
+  { to: "/forecast", label: "销量预测", icon: LineChart, desc: "周预估 / 采购清单" },
   { to: "/transactions", label: "流水记账", icon: Wallet, desc: "现金 / 扫码" },
   { to: "/inspections", label: "卫生检查", icon: ShieldCheck, desc: "检查记录" },
   { to: "/fees", label: "摊位费", icon: Receipt, desc: "缴纳状态" },

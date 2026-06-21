@@ -100,3 +100,62 @@ export interface AlertItem {
   detail: string;
   href: string;
 }
+
+export type WeatherType = "sunny" | "cloudy" | "rainy" | "stormy" | "snowy" | "hot";
+
+export interface WeatherDay {
+  date: string;
+  type: WeatherType;
+  tempHigh: number;
+  tempLow: number;
+  description: string;
+}
+
+export interface Holiday {
+  date: string;
+  name: string;
+  isPublic: boolean;
+}
+
+export interface DailySalesRecord {
+  date: string;
+  stallId: string;
+  category: string;
+  quantity: number;
+  revenue: number;
+}
+
+export interface IngredientMap {
+  category: string;
+  ingredients: { name: string; quantity: number; unit: string }[];
+}
+
+export interface ForecastDay {
+  date: string;
+  weekday: string;
+  weather: WeatherDay;
+  isHoliday: boolean;
+  holidayName?: string;
+  factor: number;
+}
+
+export interface CategoryForecast {
+  category: string;
+  stallId: string;
+  stallName: string;
+  daily: { date: string; quantity: number; revenue: number }[];
+  weeklyTotal: { quantity: number; revenue: number };
+  confidence: "high" | "medium" | "low";
+}
+
+export interface ProcurementItem {
+  name: string;
+  unit: string;
+  requiredQty: number;
+  safetyStock: number;
+  suggestedQty: number;
+  currentStock: number;
+  toPurchase: number;
+  usedBy: string[];
+  estimatedCost?: number;
+}
