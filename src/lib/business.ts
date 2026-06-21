@@ -290,7 +290,7 @@ export interface CategoryRankingItem {
   totalQuantity: number;
   totalRevenue: number;
   stallCount: number;
-  topStall?: { stallId: string; stallName: string; quantity: number };
+  topStall?: { stallId: string; stallName: string; stallNo: string; quantity: number };
 }
 
 export interface LocationRanking {
@@ -347,11 +347,11 @@ export function computeCategoryRankings(
     if (!loc) return;
     const rankings: CategoryRankingItem[] = [];
     categoryMap.forEach((data, category) => {
-      let topStall: { stallId: string; stallName: string; quantity: number } | undefined;
+      let topStall: { stallId: string; stallName: string; stallNo: string; quantity: number } | undefined;
       data.stalls.forEach((qty, sid) => {
         if (!topStall || qty > topStall.quantity) {
           const stall = stallMap.get(sid);
-          topStall = { stallId: sid, stallName: stall?.name ?? sid, quantity: qty };
+          topStall = { stallId: sid, stallName: stall?.name ?? sid, stallNo: stall?.stallNo ?? "", quantity: qty };
         }
       });
       rankings.push({

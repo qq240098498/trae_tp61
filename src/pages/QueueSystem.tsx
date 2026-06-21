@@ -232,7 +232,7 @@ export default function QueueSystem() {
       <div className="mb-6">
         <SectionCard
           title="招牌菜 PK 榜"
-          subtitle={`${weeklyRankings?.locationCode ?? ""} · 本周品类销量排名 · 摊主菜单参考`}
+          subtitle={`${weeklyRankings?.locationCode ?? ""} ${weeklyRankings?.locationName ?? ""} · 本周品类销量排名 · 摊主菜单参考`}
           icon={<Trophy size={18} />}
           action={
             <span className="text-[11px] text-ink-faint">
@@ -296,6 +296,7 @@ export default function QueueSystem() {
                     <div className="mt-0.5 flex items-center gap-1 text-sm font-medium text-ink">
                       <ChefHat size={14} className="text-terracotta-400" />
                       {item.topStall?.stallName}
+                      <span className="text-[10px] text-ink-faint">{item.topStall?.stallNo}</span>
                     </div>
                     <div className="text-[11px] text-ink-muted">
                       售出 {item.topStall?.quantity} 份
