@@ -10,8 +10,9 @@ import type {
   PaymentHistory,
   MonthlyFeeSummary,
   DunningNotice,
+  DailySalesRecord,
 } from "@/types";
-import { todayISO, addDays, daysBetween } from "@/lib/utils";
+import { todayISO, addDays, daysBetween, startOfWeekISO } from "@/lib/utils";
 
 /** 违规占道：当日点位非其固定点位 且 无对应 approved 临时申请 */
 export function isIllegalOccupation(
@@ -282,4 +283,105 @@ export function getStallTotalArrears(
   return fees
     .filter((f) => f.stallId === stallId && isOverdueFee(f, today))
     .reduce((s, f) => s + (f.dueAmount - f.paidAmount), 0);
+}
+
+export interface CategoryRankingItem {
+  category: string;
+  totalQuantity: number;
+  totalRevenue: number;
+  stallCount: number;
+  topStall?: { stallId: string; stallName: string; quantity: number };
+}
+
+export interface LocationRanking {
+  locationId: string;
+  locationName: string;
+  locationCode: string;
+  rankings: CategoryRankingItem[];
+}
+
+export function computeCategoryRankings(
+  salesRecords: DailySalesRecord[],
+  stalls: Stall[],
+  locations: Location[],
+  locationId?: string,
+  startDate?: string,
+  endDate?: string,
+): LocationRanking[] {
+  const filteredRecords = salesRecords.filter((r) => {
+    if (startDate && r.date < startDate) return false;
+    if (endDate && r.date > endDate) return false;
+    if (locationId) {
+      const stall = stalls.find((s) => s.id === r.stallId);
+      if (!stall || stall.locationId !== locationId) return false;
+    }
+    return true;
+  });
+
+  const stallMap = new Map(stalls.map((s) => [s.id, s]));
+  const locMap = new Map(locations.map((l) => [l.id, l]));
+
+  const locationGroups = new Map<string, Map<string, { totalQuantity: number; totalRevenue: number; stalls: Map<string, number> }>>();
+
+  filteredRecords.forEach((record) => {
+    const stall = stallMap.get(record.stallId);
+    if (!stall) return;
+    const locId = stall.locationId;
+    if (!locationGroups.has(locId)) {
+      locationGroups.set(locId, new Map());
+    }
+    const categoryMap = locationGroups.get(locId)!;
+    if (!categoryMap.has(record.category)) {
+      categoryMap.set(record.category, { totalQuantity: 0, totalRevenue: 0, stalls: new Map() });
+    }
+    const catData = categoryMap.get(record.category)!;
+    catData.totalQuantity += record.quantity;
+    catData.totalRevenue += record.revenue;
+    const stallQty = catData.stalls.get(record.stallId) ?? 0;
+    catData.stalls.set(record.stallId, stallQty + record.quantity);
+  });
+
+  const results: LocationRanking[] = [];
+  locationGroups.forEach((categoryMap, locId) => {
+    const loc = locMap.get(locId);
+    if (!loc) return;
+    const rankings: CategoryRankingItem[] = [];
+    categoryMap.forEach((data, category) => {
+      let topStall: { stallId: string; stallName: string; quantity: number } | undefined;
+      data.stalls.forEach((qty, sid) => {
+        if (!topStall || qty > topStall.quantity) {
+          const stall = stallMap.get(sid);
+          topStall = { stallId: sid, stallName: stall?.name ?? sid, quantity: qty };
+        }
+      });
+      rankings.push({
+        category,
+        totalQuantity: data.totalQuantity,
+        totalRevenue: data.totalRevenue,
+        stallCount: data.stalls.size,
+        topStall,
+      });
+    });
+    rankings.sort((a, b) => b.totalQuantity - a.totalQuantity);
+    results.push({
+      locationId: locId,
+      locationName: loc.address,
+      locationCode: loc.code,
+      rankings,
+    });
+  });
+
+  return results.sort((a, b) => a.locationCode.localeCompare(b.locationCode));
+}
+
+export function getWeeklyCategoryRankings(
+  salesRecords: DailySalesRecord[],
+  stalls: Stall[],
+  locations: Location[],
+  locationId?: string,
+  today = todayISO(),
+): LocationRanking[] {
+  const weekStart = startOfWeekISO(today);
+  const weekEnd = today;
+  return computeCategoryRankings(salesRecords, stalls, locations, locationId, weekStart, weekEnd);
 }

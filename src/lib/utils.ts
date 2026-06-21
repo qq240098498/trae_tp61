@@ -72,3 +72,11 @@ export function weekdayLabel(iso: string): string {
   const labels = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
   return labels[d.getDay()];
 }
+
+export function startOfWeekISO(iso: string): string {
+  const d = new Date(iso.replace(/-/g, "/"));
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toISODate(d);
+}

@@ -8,9 +8,12 @@ import {
   QrCode,
   Store,
   Volume2,
+  Trophy,
+  Medal,
 } from "lucide-react";
 import { useStore } from "@/store/useStore";
-import { todayISO, formatMoney, cn } from "@/lib/utils";
+import { todayISO, formatMoney, cn, startOfWeekISO, formatDate } from "@/lib/utils";
+import { getWeeklyCategoryRankings } from "@/lib/business";
 import PageHeader from "@/components/PageHeader";
 import StatCard from "@/components/StatCard";
 import SectionCard from "@/components/SectionCard";
@@ -35,7 +38,7 @@ const STATUS_COLORS: Record<OrderStatus, string> = {
 };
 
 export default function QueueSystem() {
-  const { stalls, orders, updateOrderStatus, callNextOrder, recallOrder, completeOrder, cancelOrder } = useStore();
+  const { stalls, locations, salesRecords, orders, updateOrderStatus, callNextOrder, recallOrder, completeOrder, cancelOrder } = useStore();
   const [selectedStall, setSelectedStall] = useState<string>(stalls[0]?.id ?? "");
   const [callingOrder, setCallingOrder] = useState<Order | null>(null);
   const [showCallModal, setShowCallModal] = useState(false);
@@ -80,6 +83,17 @@ export default function QueueSystem() {
   );
 
   const currentStall = stalls.find((s) => s.id === selectedStall);
+
+  const weeklyRankings = useMemo(() => {
+    if (!currentStall) return null;
+    const rankings = getWeeklyCategoryRankings(salesRecords, stalls, locations, currentStall.locationId);
+    return rankings[0] ?? null;
+  }, [salesRecords, stalls, locations, currentStall]);
+
+  const top3Categories = useMemo(() => {
+    if (!weeklyRankings) return [];
+    return weeklyRankings.rankings.slice(0, 3);
+  }, [weeklyRankings]);
 
   const handleCallNext = () => {
     const next = callNextOrder(selectedStall);
@@ -212,6 +226,120 @@ export default function QueueSystem() {
               </button>
             </div>
           </div>
+        </SectionCard>
+      </div>
+
+      <div className="mb-6">
+        <SectionCard
+          title="招牌菜 PK 榜"
+          subtitle={`${weeklyRankings?.locationCode ?? ""} · 本周品类销量排名 · 摊主菜单参考`}
+          icon={<Trophy size={18} />}
+          action={
+            <span className="text-[11px] text-ink-faint">
+              {weeklyRankings ? `${formatDate(startOfWeekISO(today))} 至今` : ""}
+            </span>
+          }
+        >
+          {top3Categories.length === 0 ? (
+            <div className="py-8 text-center text-sm text-ink-faint">暂无本周销量数据</div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-3">
+              {top3Categories.map((item, index) => (
+                <div
+                  key={item.category}
+                  className={cn(
+                    "relative rounded-xl border p-4 transition-all hover:shadow-md",
+                    index === 0
+                      ? "border-amber2-200 bg-amber2-50/50"
+                      : index === 1
+                      ? "border-ink-200 bg-cream-50"
+                      : "border-terracotta-200 bg-terracotta-50/30",
+                  )}
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <span
+                      className={cn(
+                        "flex h-8 w-8 items-center justify-center rounded-full text-lg font-bold",
+                        index === 0
+                          ? "bg-amber2-400 text-cream-50"
+                          : index === 1
+                          ? "bg-ink-300 text-cream-50"
+                          : "bg-terracotta-300 text-cream-50",
+                      )}
+                    >
+                      {index + 1}
+                    </span>
+                    <Medal
+                      size={20}
+                      className={cn(
+                        index === 0
+                          ? "text-amber2-500"
+                          : index === 1
+                          ? "text-ink-400"
+                          : "text-terracotta-400",
+                      )}
+                    />
+                  </div>
+                  <div className="font-display text-lg text-ink">{item.category}</div>
+                  <div className="mt-1 text-xs text-ink-muted">本周销量 TOP</div>
+                  <div className="mt-3 flex items-baseline gap-1">
+                    <span className="font-serif text-2xl font-bold text-ink">
+                      {item.totalQuantity}
+                    </span>
+                    <span className="text-xs text-ink-faint">份</span>
+                  </div>
+                  <div className="mt-1 text-xs text-ink-soft">
+                    营收 {formatMoney(item.totalRevenue)}
+                  </div>
+                  <div className="mt-3 border-t border-cream-200/60 pt-2">
+                    <div className="text-[11px] text-ink-faint">销量冠军摊主</div>
+                    <div className="mt-0.5 flex items-center gap-1 text-sm font-medium text-ink">
+                      <ChefHat size={14} className="text-terracotta-400" />
+                      {item.topStall?.stallName}
+                    </div>
+                    <div className="text-[11px] text-ink-muted">
+                      售出 {item.topStall?.quantity} 份
+                    </div>
+                  </div>
+                  {index === 0 && (
+                    <div className="absolute -right-2 -top-2">
+                      <div className="rotate-12 rounded-full bg-amber2-500 px-2 py-0.5 text-[10px] font-bold text-cream-50 shadow-sm">
+                        招牌王
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {weeklyRankings && weeklyRankings.rankings.length > 3 && (
+            <div className="mt-4 border-t border-cream-200/60 pt-3">
+              <div className="mb-2 text-xs font-medium text-ink-soft">更多品类排名</div>
+              <div className="space-y-1.5">
+                {weeklyRankings.rankings.slice(3, 6).map((item, index) => (
+                  <div
+                    key={item.category}
+                    className="flex items-center justify-between rounded-md bg-cream-50/50 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-cream-200 text-[10px] font-bold text-ink-muted">
+                        {index + 4}
+                      </span>
+                      <span className="text-sm text-ink">{item.category}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-serif text-sm font-semibold text-ink tnum">
+                        {item.totalQuantity} 份
+                      </span>
+                      <span className="text-[11px] text-ink-faint">
+                        {item.stallCount} 摊竞争
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </SectionCard>
       </div>
 
