@@ -1,0 +1,167 @@
+import type {
+  Stall,
+  Location,
+  TempApplication,
+  DailyRegistration,
+  Transaction,
+  Inspection,
+  FeeRecord,
+  AlertItem,
+} from "@/types";
+import { todayISO, addDays } from "@/lib/utils";
+
+/** 违规占道：当日点位非其固定点位 且 无对应 approved 临时申请 */
+export function isIllegalOccupation(
+  reg: DailyRegistration,
+  stall: Stall | undefined,
+  applications: TempApplication[],
+): boolean {
+  if (!stall) return false;
+  if (reg.locationId === stall.locationId) return false;
+  const approved = applications.some(
+    (a) =>
+      a.stallId === reg.stallId &&
+      a.locationId === reg.locationId &&
+      a.status === "approved" &&
+      a.date === reg.date,
+  );
+  return !approved;
+}
+
+/** 欠费：实缴 < 应缴 且 已过到期日 */
+export function isOverdueFee(fee: FeeRecord, today = todayISO()): boolean {
+  if (fee.paidAmount >= fee.dueAmount) return false;
+  return fee.dueDate < today;
+}
+
+export function latestInspection(
+  inspections: Inspection[],
+  stallId: string,
+): Inspection | undefined {
+  const list = inspections
+    .filter((i) => i.stallId === stallId)
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  return list[0];
+}
+
+/** 卫生未整改：最新检查 fail 且未整改 */
+export function hasOpenInspection(
+  inspections: Inspection[],
+  stallId: string,
+): boolean {
+  const latest = latestInspection(inspections, stallId);
+  if (!latest) return false;
+  return latest.result === "fail" && !latest.rectified;
+}
+
+export function feeStatusOf(fee: FeeRecord, today = todayISO()): {
+  label: string;
+  kind: "paid" | "partial" | "unpaid" | "overdue";
+  overdue: boolean;
+} {
+  if (fee.paidAmount >= fee.dueAmount) return { label: "已缴清", kind: "paid", overdue: false };
+  const overdue = fee.dueDate < today;
+  if (overdue) return { label: "欠费逾期", kind: "overdue", overdue: true };
+  if (fee.paidAmount > 0) return { label: "部分缴纳", kind: "partial", overdue: false };
+  return { label: "待缴纳", kind: "unpaid", overdue: false };
+}
+
+export function computeAlerts(
+  stalls: Stall[],
+  locations: Location[],
+  applications: TempApplication[],
+  dailyRegs: DailyRegistration[],
+  fees: FeeRecord[],
+  inspections: Inspection[],
+  today = todayISO(),
+): AlertItem[] {
+  const alerts: AlertItem[] = [];
+
+  dailyRegs
+    .filter((r) => r.date === today)
+    .forEach((reg) => {
+      const stall = stalls.find((s) => s.id === reg.stallId);
+      if (isIllegalOccupation(reg, stall, applications)) {
+        const loc = locations.find((l) => l.id === reg.locationId);
+        alerts.push({
+          key: `occ-${reg.id}`,
+          type: "occupation",
+          stallId: reg.stallId,
+          title: `违规占道 · ${stall?.name ?? reg.stallId}`,
+          detail: `非固定点位经营，点位：${loc?.code ?? reg.locationId}（${loc?.address ?? ""}）`,
+          href: "/daily-ops",
+        });
+      }
+    });
+
+  fees.forEach((fee) => {
+    const stall = stalls.find((s) => s.id === fee.stallId);
+    if (isOverdueFee(fee, today)) {
+      alerts.push({
+        key: `fee-${fee.id}`,
+        type: "fee",
+        stallId: fee.stallId,
+        title: `未缴摊位费 · ${stall?.name ?? fee.stallId}`,
+        detail: `${fee.period}期 应缴¥${fee.dueAmount}，到期日 ${fee.dueDate}，已逾期`,
+        href: "/fees",
+      });
+    }
+  });
+
+  stalls.forEach((stall) => {
+    if (hasOpenInspection(inspections, stall.id)) {
+      const latest = latestInspection(inspections, stall.id);
+      alerts.push({
+        key: `ins-${stall.id}`,
+        type: "inspection",
+        stallId: stall.id,
+        title: `卫生不合格未整改 · ${stall.name}`,
+        detail: `检查日 ${latest?.date}，扣分 ${latest?.deduction}，待整改`,
+        href: "/inspections",
+      });
+    }
+  });
+
+  return alerts;
+}
+
+export function locationOccupancy(
+  locationId: string,
+  dailyRegs: DailyRegistration[],
+  today = todayISO(),
+): number {
+  return dailyRegs.filter((r) => r.locationId === locationId && r.date === today).length;
+}
+
+export interface DayTrend {
+  date: string;
+  cash: number;
+  scan: number;
+  total: number;
+}
+
+export function last7DaysTrend(transactions: Transaction[], today = todayISO()): DayTrend[] {
+  const days: DayTrend[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const date = addDays(today, -i);
+    const dayTx = transactions.filter((t) => t.time.startsWith(date));
+    const cash = dayTx.filter((t) => t.method === "cash").reduce((s, t) => s + t.amount, 0);
+    const scan = dayTx.filter((t) => t.method === "scan").reduce((s, t) => s + t.amount, 0);
+    days.push({ date, cash, scan, total: cash + scan });
+  }
+  return days;
+}
+
+export function dayTxSummary(transactions: Transaction[], date: string) {
+  const dayTx = transactions.filter((t) => t.time.startsWith(date));
+  const cash = dayTx.filter((t) => t.method === "cash").reduce((s, t) => s + t.amount, 0);
+  const scan = dayTx.filter((t) => t.method === "scan").reduce((s, t) => s + t.amount, 0);
+  return { cash, scan, total: cash + scan, count: dayTx.length };
+}
+
+export function monthTotal(transactions: Transaction[], today = todayISO()): number {
+  const prefix = today.slice(0, 7);
+  return transactions
+    .filter((t) => t.time.startsWith(prefix))
+    .reduce((s, t) => s + t.amount, 0);
+}
